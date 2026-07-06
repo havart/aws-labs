@@ -1,0 +1,143 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "DOP-C02 Level MVP Launcher Phase 1: Universal High-Availability VPC and Generic ECR Repository"
+
+Parameters:
+  VPCCidrBlock:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: CIDR block for the universal VPC
+
+  PublicSubnetACidr:
+    Type: String
+    Default: 10.0.1.0/24
+    Description: CIDR block for Public Subnet A (AZ 1)
+
+  PublicSubnetBCidr:
+    Type: String
+    Default: 10.0.2.0/24
+    Description: CIDR block for Public Subnet B (AZ 2)
+
+Resources:
+  # 1. Створення універсальної VPC / Erstellung der universellen VPC
+  MVPVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VPCCidrBlock
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: mvp-launcher-vpc
+
+  # 2. Інтернет-шлюз / Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: mvp-launcher-gateway
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MVPVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # 3. Публічні підмережі (Multi-AZ для High Availability)
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MVPVPC
+      CidrBlock: !Ref PublicSubnetACidr
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: mvp-launcher-public-subnet-a
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MVPVPC
+      CidrBlock: !Ref PublicSubnetBCidr
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: mvp-launcher-public-subnet-b
+
+  # 4. Таблиця маршрутизації / Route Table
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MVPVPC
+      Tags:
+        - Key: Name
+          Value: mvp-launcher-public-routes
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetAAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetBAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+
+  # 5. Універсальний AWS ECR Репозиторій / Generisches ECR Repository
+  GenericECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: mvp-launcher-repo
+      ImageScanningConfiguration:
+        ScanOnPush: true # DevSecOps Vulnerability Scanning
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Remove untagged images older than 14 days to optimize costs",
+                "selection": {
+                  "tagStatus": "untagged",
+                  "countType": "sinceImagePushed",
+                  "countUnit": "days",
+                  "countNumber": 14
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
+
+Outputs:
+  VPCId:
+    Description: The ID of the VPC
+    Value: !Ref MVPVPC
+    Export:
+      Name: !Sub "${AWS::StackName}-VPCId"
+  PublicSubnetA:
+    Description: Public Subnet A ID
+    Value: !Ref PublicSubnetA
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnetA"
+  PublicSubnetB:
+    Description: Public Subnet B ID
+    Value: !Ref PublicSubnetB
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnetB"
+  ECRRepositoryUri:
+    Description: URI of the ECR Repository
+    Value: !GetAtt GenericECRRepository.RepositoryUri
