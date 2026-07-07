@@ -19,7 +19,7 @@ Parameters:
 
   ContainerPort:
     Type: Number
-    Default: 80
+    Default: 8080
     Description: The port the actual application inside the Docker container listens to
 
 Resources:
