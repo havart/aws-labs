@@ -1,0 +1,40 @@
+name: DOP-C02 MVP Launcher Orchestrator
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  # Job 1: Check which files have changed
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      infra: ${{ steps.filter.outputs.infra }}
+      app: ${/ steps.filter.outputs.app }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            infra:
+              - 'infrastructure.yaml'
+              - 'compute.yaml'
+            app:
+              - 'server.js'
+              - 'package.json'
+              - 'Dockerfile'
+
+  # Job 2: Call Infrastructure Workflow
+  infra:
+    needs: changes
+    if: needs.changes.outputs.infra == 'true'
+    uses: ./.github/workflows/ci-infra.yml
+    secrets: inherit
+
+  # Job 3: Call Application Workflow
+  app:
+    needs: [changes, infra]
+    if: always() && (needs.changes.outputs.app == 'true') && (needs.infra.result == 'success' || needs.infra.result == 'skipped')
+    uses: ./.github/workflows/ci-app.yml
+    secrets: inherit
