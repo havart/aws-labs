@@ -61,15 +61,17 @@ jobs:
           {"family": "mvp-task-Stage", "networkMode": "awsvpc", "executionRoleArn": "${EXEC_ROLE_ARN}",
           "containerDefinitions": [{"name": "mvp-container", "image": "${{ needs.build.outputs.image_uri }}", "essential": true,
           "portMappings": [{"containerPort": 80, "hostPort": 80}], "environment": [{"name": "ENV", "value": "Stage"}],
-          "logConfiguration": {"logDriver": "awslogs", "options": {"awslogs-group": "/ecs/mvp-compute-layer-launcher", "awslogs-region": "${{ env.AWS_REGION }}", "awslogs-stream-prefix": "ecs"}}
+          "logConfiguration": {"logDriver": "awslogs", "options": {"awslogs-group": "/ecs/mvp-compute-layer-launcher", "awslogs-region": "${{ env.AWS_REGION }}", "awslogs-stream-prefix": "ecs"}}}
           }], "requiresCompatibilities": ["FARGATE"], "cpu": "256", "memory": "512"}
           EOF
 
           TASK_ARN=$(aws ecs register-task-definition --cli-input-json file://task-def-stage.json --query "taskDefinition.taskDefinitionArn" --output text)
           if aws ecs describe-services --cluster ${{ env.ECS_CLUSTER }} --services mvp-service-Stage --query "services[0].status" --output text | grep -q "ACTIVE"; then
-            aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service mvp-service-Stage --task-definition $TASK_ARN
+            echo "Updating existing service..."
+            aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service-name mvp-service-Stage --task-definition $TASK_ARN
           else
-            aws ecs create-service --cluster ${{ env.ECS_CLUSTER }} --service mvp-service-Stage --task-definition $TASK_ARN --launch-type FARGATE --desired-count 1 --network-configuration "awsvpcConfiguration={subnets=[$SUBNET_A,$SUBNET_B],securityGroups=[$SG_ID],assignPublicIp=ENABLED}" --load-balancers "targetGroupArn=$TG_STAGE,containerName=mvp-container,containerPort=80"
+            echo "Creating new service..."
+            aws ecs create-service --cluster ${{ env.ECS_CLUSTER }} --service-name mvp-service-Stage --task-definition $TASK_ARN --launch-type FARGATE --desired-count 1 --network-configuration "awsvpcConfiguration={subnets=[$SUBNET_A,$SUBNET_B],securityGroups=[$SG_ID],assignPublicIp=ENABLED}" --load-balancers "targetGroupArn=$TG_STAGE,containerName=mvp-container,containerPort=80"
           fi
 
   # Step C: Deploy to Production Environment (Manual Approval Required)
@@ -95,13 +97,15 @@ jobs:
           {"family": "mvp-task-Production", "networkMode": "awsvpc", "executionRoleArn": "${EXEC_ROLE_ARN}",
           "containerDefinitions": [{"name": "mvp-container", "image": "${{ needs.build.outputs.image_uri }}", "essential": true,
           "portMappings": [{"containerPort": 80, "hostPort": 80}], "environment": [{"name": "ENV", "value": "Production"}],
-          "logConfiguration": {"logDriver": "awslogs", "options": {"awslogs-group": "/ecs/mvp-compute-layer-launcher", "awslogs-region": "${{ env.AWS_REGION }}", "awslogs-stream-prefix": "ecs"}}
+          "logConfiguration": {"logDriver": "awslogs", "options": {"awslogs-group": "/ecs/mvp-compute-layer-launcher", "awslogs-region": "${{ env.AWS_REGION }}", "awslogs-stream-prefix": "ecs"}}}
           }], "requiresCompatibilities": ["FARGATE"], "cpu": "256", "memory": "512"}
           EOF
 
           TASK_ARN=$(aws ecs register-task-definition --cli-input-json file://task-def-prod.json --query "taskDefinition.taskDefinitionArn" --output text)
           if aws ecs describe-services --cluster ${{ env.ECS_CLUSTER }} --services mvp-service-Production --query "services[0].status" --output text | grep -q "ACTIVE"; then
-            aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service mvp-service-Production --task-definition $TASK_ARN
+            echo "Updating existing service..."
+            aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service-name mvp-service-Production --task-definition $TASK_ARN
           else
-            aws ecs create-service --cluster ${{ env.ECS_CLUSTER }} --service mvp-service-Production --task-definition $TASK_ARN --launch-type FARGATE --desired-count 1 --network-configuration "awsvpcConfiguration={subnets=[$SUBNET_A,$SUBNET_B],securityGroups=[$SG_ID],assignPublicIp=ENABLED}" --load-balancers "targetGroupArn=$TG_PROD,containerName=mvp-container,containerPort=80"
+            echo "Creating new service..."
+            aws ecs create-service --cluster ${{ env.ECS_CLUSTER }} --service-name mvp-service-Production --task-definition $TASK_ARN --launch-type FARGATE --desired-count 1 --network-configuration "awsvpcConfiguration={subnets=[$SUBNET_A,$SUBNET_B],securityGroups=[$SG_ID],assignPublicIp=ENABLED}" --load-balancers "targetGroupArn=$TG_PROD,containerName=mvp-container,containerPort=80"
           fi
