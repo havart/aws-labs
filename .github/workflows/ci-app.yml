@@ -62,7 +62,7 @@ jobs:
           TASK_ARN=$(aws ecs register-task-definition --cli-input-json file://task-def-stage.json --query "taskDefinition.taskDefinitionArn" --output text)
           if aws ecs describe-services --cluster ${{ env.ECS_CLUSTER }} --services mvp-service-Stage --query "services[0].status" --output text | grep -q "ACTIVE"; then
             echo "Updating existing service..."
-            aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service-name mvp-service-Stage --task-definition $TASK_ARN
+            aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service mvp-service-Stage --task-definition $TASK_ARN
           else
             echo "Creating new service..."
             aws ecs create-service --cluster ${{ env.ECS_CLUSTER }} --service-name mvp-service-Stage --task-definition $TASK_ARN --launch-type FARGATE --desired-count 1 --network-configuration "awsvpcConfiguration={subnets=[$SUBNET_A,$SUBNET_B],securityGroups=[$SG_ID],assignPublicIp=ENABLED}" --load-balancers "targetGroupArn=$TG_STAGE,containerName=mvp-container,containerPort=8080"
@@ -92,7 +92,7 @@ jobs:
           TASK_ARN=$(aws ecs register-task-definition --cli-input-json file://task-def-prod.json --query "taskDefinition.taskDefinitionArn" --output text)
           if aws ecs describe-services --cluster ${{ env.ECS_CLUSTER }} --services mvp-service-Production --query "services[0].status" --output text | grep -q "ACTIVE"; then
             echo "Updating existing service..."
-            aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service-name mvp-service-Production --task-definition $TASK_ARN
+            aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service mvp-service-Production --task-definition $TASK_ARN
           else
             echo "Creating new service..."
             aws ecs create-service --cluster ${{ env.ECS_CLUSTER }} --service-name mvp-service-Production --task-definition $TASK_ARN --launch-type FARGATE --desired-count 1 --network-configuration "awsvpcConfiguration={subnets=[$SUBNET_A,$SUBNET_B],securityGroups=[$SG_ID],assignPublicIp=ENABLED}" --load-balancers "targetGroupArn=$TG_PROD,containerName=mvp-container,containerPort=8080"
