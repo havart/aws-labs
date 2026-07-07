@@ -8,6 +8,10 @@ env:
   ECR_REPOSITORY: "mvp-launcher-repo"
   ECS_CLUSTER: "mvp-launcher-cluster"
 
+defaults:
+  run:
+    working-directory: app
+
 jobs:
   # Step A: Build Docker Image
   build:
