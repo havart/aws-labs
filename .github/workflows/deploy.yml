@@ -18,10 +18,7 @@ jobs:
         with:
           filters: |
             infra:
-              - 'infrastructure.yaml'
-              - 'compute.yaml'
               - 'infra/**'
-              - '.github/workflows/**'
             app:
               - 'app/**'
               - '.github/workflows/**'
