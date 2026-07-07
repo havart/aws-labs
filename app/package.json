@@ -1,0 +1,12 @@
+{
+  "name": "mvp-launcher-app",
+  "version": "1.0.0",
+  "description": "Generic MVP Application for DOP-C02 Course",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
