@@ -37,14 +37,14 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
 
-  # 2. CloudWatch Log Group для логів контейнерів
+  # 2. CloudWatch Log Group
   ContainerLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/ecs/${AWS::StackName}-launcher"
       RetentionInDays: 7
 
-  # 3. ECS Кластер
+  # 3. ECS cluster
   MVPCluster:
     Type: AWS::ECS::Cluster
     Properties:

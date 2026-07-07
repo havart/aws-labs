@@ -19,6 +19,7 @@ jobs:
           filters: |
             infra:
               - 'infra/**'
+              - '.github/workflows/ci-infra.yml'
             app:
               - 'app/**'
               - '.github/workflows/**'
