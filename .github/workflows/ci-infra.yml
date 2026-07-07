@@ -21,14 +21,14 @@ jobs:
         uses: aws-actions/aws-cloudformation-github-deploy@v1
         with:
           name: mvp-infra-base
-          template: infrastructure.yaml
+          template: infra/infrastructure.yaml
           no-fail-on-empty-changeset: "true"
 
       - name: Sync Compute Layer Stack
         uses: aws-actions/aws-cloudformation-github-deploy@v1
         with:
           name: mvp-compute-layer
-          template: compute.yaml
+          template: infra/compute.yaml
           no-fail-on-empty-changeset: "true"
           parameter-overrides: "BaseStackName=mvp-infra-base"
           capabilities: CAPABILITY_IAM

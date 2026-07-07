@@ -21,11 +21,10 @@ jobs:
               - 'infrastructure.yaml'
               - 'compute.yaml'
               - 'infra/**'
+              - '.github/workflows/**'
             app:
-              - 'server.js'
-              - 'package.json'
-              - 'Dockerfile'
               - 'app/**'
+              - '.github/workflows/**'
 
   # Job 2: Call Infrastructure Workflow
   infra:
