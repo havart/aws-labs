@@ -98,7 +98,6 @@ Resources:
   ProdTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: mvp-tg-prod
       VpcId:
         Fn::ImportValue: !Sub "${BaseStackName}-VPCId"
       Protocol: HTTP
@@ -109,7 +108,6 @@ Resources:
   StageTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: mvp-tg-stage
       VpcId:
         Fn::ImportValue: !Sub "${BaseStackName}-VPCId"
       Protocol: HTTP
