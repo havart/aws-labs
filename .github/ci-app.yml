@@ -1,0 +1,132 @@
+# Build and Push Docker Image to ECR
+build-docker:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  before_script:
+    - apk add --no-cache aws-cli
+    - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+    - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+    - aws configure set region $AWS_REGION
+  script:
+    - ECR_REGISTRY=$(aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $(aws sts get-caller-identity --query Account --output text).dkr.ecr.$AWS_REGION.amazonaws.com | awk '{print $NF}')
+    - REPO_URL=$(aws sts get-caller-identity --query Account --output text).dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY
+    - IMAGE_TAG=$CI_COMMIT_SHORT_SHA
+    - docker build -t $REPO_URL:$IMAGE_TAG -t $REPO_URL:latest .
+    - docker push $REPO_URL:$IMAGE_TAG
+    - docker push $REPO_URL:latest
+  only:
+    changes:
+      - server.js
+      - package.json
+      - Dockerfile
+
+# Automated Continuous Deployment to Stage Environment
+deploy-to-stage:
+  extends: .aws_base
+  stage: deploy-stage
+  script:
+    - EXEC_ROLE_ARN=$(aws cloudformation describe-stacks --stack-name mvp-compute-layer --query "Stacks[0].Outputs[?OutputKey=='ECSTaskExecutionRoleArn'].OutputValue" --output text)
+    - SUBNET_A=$(aws cloudformation describe-stacks --stack-name mvp-infra-base --query "Stacks[0].Outputs[?OutputKey=='PublicSubnetA'].OutputValue" --output text)
+    - SUBNET_B=$(aws cloudformation describe-stacks --stack-name mvp-infra-base --query "Stacks[0].Outputs[?OutputKey=='PublicSubnetB'].OutputValue" --output text)
+    - SG_ID=$(aws cloudformation describe-stacks --stack-name mvp-compute-layer --query "Stacks[0].Outputs[?OutputKey=='ContainerSecurityGroupId'].OutputValue" --output text)
+    - TG_STAGE=$(aws cloudformation describe-stacks --stack-name mvp-compute-layer --query "Stacks[0].Outputs[?OutputKey=='ALBTargetGroupStageArn'].OutputValue" --output text)
+    - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+    - IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${CI_COMMIT_SHORT_SHA}"
+    - |
+      cat <<EOF > task-def-stage.json
+      {
+        "family": "mvp-task-Stage",
+        "networkMode": "awsvpc",
+        "executionRoleArn": "${EXEC_ROLE_ARN}",
+        "containerDefinitions": [{
+          "name": "mvp-container",
+          "image": "${IMAGE_URI}",
+          "essential": true,
+          "portMappings": [{"containerPort": 80, "hostPort": 80}],
+          "environment": [{"name": "ENV", "value": "Stage"}],
+          "logConfiguration": {
+            "logDriver": "awslogs",
+            "options": {
+              "awslogs-group": "/ecs/mvp-compute-layer-launcher",
+              "awslogs-region": "${AWS_REGION}",
+              "awslogs-stream-prefix": "ecs"
+            }
+          }
+        }],
+        "requiresCompatibilities": ["FARGATE"], "cpu": "256", "memory": "512"
+      }
+      EOF
+    - TASK_ARN=$(aws ecs register-task-definition --cli-input-json file://task-def-stage.json --query "taskDefinition.taskDefinitionArn" --output text)
+    - |
+      if aws ecs describe-services --cluster $ECS_CLUSTER --services mvp-service-Stage --query "services[0].status" --output text | grep -q "ACTIVE"; then
+        echo "Updating existing Stage service..."
+        aws ecs update-service --cluster $ECS_CLUSTER --service mvp-service-Stage --task-definition $TASK_ARN
+      else
+        echo "Creating new Stage service..."
+        aws ecs create-service --cluster $ECS_CLUSTER --service mvp-service-Stage \
+          --task-definition $TASK_ARN --launch-type FARGATE --desired-count 1 \
+          --network-configuration "awsvpcConfiguration={subnets=[$SUBNET_A,$SUBNET_B],securityGroups=[$SG_ID],assignPublicIp=ENABLED}" \
+          --load-balancers "targetGroupArn=$TG_STAGE,containerName=mvp-container,containerPort=80"
+      fi
+  only:
+    changes:
+      - server.js
+      - package.json
+      - Dockerfile
+
+# Manual Deployment Gate for Production Environment
+deploy-to-production:
+  extends: .aws_base
+  stage: deploy-prod
+  when: manual
+  script:
+    - EXEC_ROLE_ARN=$(aws cloudformation describe-stacks --stack-name mvp-compute-layer --query "Stacks[0].Outputs[?OutputKey=='ECSTaskExecutionRoleArn'].OutputValue" --output text)
+    - SUBNET_A=$(aws cloudformation describe-stacks --stack-name mvp-infra-base --query "Stacks[0].Outputs[?OutputKey=='PublicSubnetA'].OutputValue" --output text)
+    - SUBNET_B=$(aws cloudformation describe-stacks --stack-name mvp-infra-base --query "Stacks[0].Outputs[?OutputKey=='PublicSubnetB'].OutputValue" --output text)
+    - SG_ID=$(aws cloudformation describe-stacks --stack-name mvp-compute-layer --query "Stacks[0].Outputs[?OutputKey=='ContainerSecurityGroupId'].OutputValue" --output text)
+    - TG_PROD=$(aws cloudformation describe-stacks --stack-name mvp-compute-layer --query "Stacks[0].Outputs[?OutputKey=='ALBTargetGroupProdArn'].OutputValue" --output text)
+    - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+    - IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${CI_COMMIT_SHORT_SHA}"
+    - |
+      cat <<EOF > task-def-prod.json
+      {
+        "family": "mvp-task-Production",
+        "networkMode": "awsvpc",
+        "executionRoleArn": "${EXEC_ROLE_ARN}",
+        "containerDefinitions": [{
+          "name": "mvp-container",
+          "image": "${IMAGE_URI}",
+          "essential": true,
+          "portMappings": [{"containerPort": 80, "hostPort": 80}],
+          "environment": [{"name": "ENV", "value": "Production"}],
+          "logConfiguration": {
+            "logDriver": "awslogs",
+            "options": {
+              "awslogs-group": "/ecs/mvp-compute-layer-launcher",
+              "awslogs-region": "${AWS_REGION}",
+              "awslogs-stream-prefix": "ecs"
+            }
+          }
+        }],
+        "requiresCompatibilities": ["FARGATE"], "cpu": "256", "memory": "512"
+      }
+      EOF
+    - TASK_ARN=$(aws ecs register-task-definition --cli-input-json file://task-def-prod.json --query "taskDefinition.taskDefinitionArn" --output text)
+    - |
+      if aws ecs describe-services --cluster $ECS_CLUSTER --services mvp-service-Production --query "services[0].status" --output text | grep -q "ACTIVE"; then
+        echo "Updating existing Production service..."
+        aws ecs update-service --cluster $ECS_CLUSTER --service mvp-service-Production --task-definition $TASK_ARN
+      else
+        echo "Creating new Production service..."
+        aws ecs create-service --cluster $ECS_CLUSTER --service mvp-service-Production \
+          --task-definition $TASK_ARN --launch-type FARGATE --desired-count 1 \
+          --network-configuration "awsvpcConfiguration={subnets=[$SUBNET_A,$SUBNET_B],securityGroups=[$SG_ID],assignPublicIp=ENABLED}" \
+          --load-balancers "targetGroupArn=$TG_PROD,containerName=mvp-container,containerPort=80"
+      fi
+  only:
+    changes:
+      - server.js
+      - package.json
+      - Dockerfile

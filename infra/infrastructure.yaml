@@ -18,7 +18,7 @@ Parameters:
     Description: CIDR block for Public Subnet B (AZ 2)
 
 Resources:
-  # 1. Створення універсальної VPC / Erstellung der universellen VPC
+  # Erstellung der universellen VPC
   MVPVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -29,7 +29,6 @@ Resources:
         - Key: Name
           Value: mvp-launcher-vpc
 
-  # 2. Інтернет-шлюз / Internet Gateway
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -43,7 +42,6 @@ Resources:
       VpcId: !Ref MVPVPC
       InternetGatewayId: !Ref InternetGateway
 
-  # 3. Публічні підмережі (Multi-AZ для High Availability)
   PublicSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
@@ -66,7 +64,6 @@ Resources:
         - Key: Name
           Value: mvp-launcher-public-subnet-b
 
-  # 4. Таблиця маршрутизації / Route Table
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -95,7 +92,6 @@ Resources:
       SubnetId: !Ref PublicSubnetB
       RouteTableId: !Ref PublicRouteTable
 
-  # 5. Універсальний AWS ECR Репозиторій / Generisches ECR Repository
   GenericECRRepository:
     Type: AWS::ECR::Repository
     Properties:

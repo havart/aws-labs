@@ -1,0 +1,163 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: ECS Fargate Cluster, ALB, IAM Roles for Stage and Prod
+
+Parameters:
+  BaseStackName:
+    Type: String
+    Default: mvp-infra-base
+    Description: Name of the Phase 1 CloudFormation stack (to import VPC/Subnets)
+
+  ProductionPort:
+    Type: Number
+    Default: 80
+    Description: Public port for Production environment (Default HTTP)
+
+  StagePort:
+    Type: Number
+    Default: 8080
+    Description: Public port for Stage environment (Testing)
+
+  ContainerPort:
+    Type: Number
+    Default: 80
+    Description: The port the actual application inside the Docker container listens to
+
+Resources:
+  # 1. IAM Роль для виконання завдань ECS
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ecs-tasks.amazonaws.com]
+            Action: ["sts:AssumeRole"]
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  # 2. CloudWatch Log Group для логів контейнерів
+  ContainerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/ecs/${AWS::StackName}-launcher"
+      RetentionInDays: 7
+
+  # 3. ECS Кластер
+  MVPCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: mvp-launcher-cluster
+
+  # 4. Security Group для Балансувальника
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP traffic to ALB
+      VpcId:
+        Fn::ImportValue: !Sub "${BaseStackName}-VPCId"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !Ref ProductionPort
+          ToPort: !Ref ProductionPort
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: !Ref StagePort
+          ToPort: !Ref StagePort
+          CidrIp: 0.0.0.0/0
+
+  # 5. Security Group для Контейнерів (Дозволяє вхід тільки від ALB)
+  ContainerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow traffic only from ALB
+      VpcId:
+        Fn::ImportValue: !Sub "${BaseStackName}-VPCId"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !Ref ContainerPort
+          ToPort: !Ref ContainerPort
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+
+  # 6. Application Load Balancer (ВИПРАВЛЕНО ТИП РЕСУРСУ НА V2)
+  MVPLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: mvp-launcher-alb
+      Type: application
+      Scheme: internet-facing
+      IpAddressType: ipv4
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - Fn::ImportValue: !Sub "${BaseStackName}-PublicSubnetA"
+        - Fn::ImportValue: !Sub "${BaseStackName}-PublicSubnetB"
+
+  # 7. Target Groups (Цільові групи для Stage та Prod)
+  ProdTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: mvp-tg-prod
+      VpcId:
+        Fn::ImportValue: !Sub "${BaseStackName}-VPCId"
+      Protocol: HTTP
+      Port: !Ref ContainerPort
+      TargetType: ip
+      HealthCheckPath: /
+
+  StageTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: mvp-tg-stage
+      VpcId:
+        Fn::ImportValue: !Sub "${BaseStackName}-VPCId"
+      Protocol: HTTP
+      Port: !Ref ContainerPort
+      TargetType: ip
+      HealthCheckPath: /
+
+  # 8. Listeners (Слухачі портів на ALB)
+  ProdListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref MVPLoadBalancer
+      Port: !Ref ProductionPort
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ProdTargetGroup
+
+  StageListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref MVPLoadBalancer
+      Port: !Ref StagePort
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref StageTargetGroup
+
+Outputs:
+  ALBTargetGroupProdArn:
+    Value: !Ref ProdTargetGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-ProdTGArn"
+  ALBTargetGroupStageArn:
+    Value: !Ref StageTargetGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-StageTGArn"
+  ECSClusterName:
+    Value: !Ref MVPCluster
+    Export:
+      Name: !Sub "${AWS::StackName}-ClusterName"
+  ECSTaskExecutionRoleArn:
+    Value: !GetAtt ECSTaskExecutionRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ExecutionRoleArn"
+  ContainerSecurityGroupId:
+    Value: !Ref ContainerSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-ContainerSGId"
+  ALBEndpoint:
+    Value: !GetAtt MVPLoadBalancer.DNSName
