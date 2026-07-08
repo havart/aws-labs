@@ -16,7 +16,7 @@ Parameters:
     Type: String
     Default: 10.0.2.0/24
     Description: CIDR block for Public Subnet B (AZ 2)
-
+#trigger
 Resources:
   # Erstellung der universellen VPC
   MVPVPC:

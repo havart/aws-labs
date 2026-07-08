@@ -94,7 +94,7 @@ Resources:
         - Fn::ImportValue: !Sub "${BaseStackName}-PublicSubnetA"
         - Fn::ImportValue: !Sub "${BaseStackName}-PublicSubnetB"
 
-  # 7. Target Groups (Цільові групи для Stage та Prod)
+  # 7. Target Groups
   ProdTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
