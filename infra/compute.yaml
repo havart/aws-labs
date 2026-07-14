@@ -23,7 +23,6 @@ Parameters:
     Description: The port the actual application inside the Docker container listens to
 
 Resources:
-  # 1. IAM Роль для виконання завдань ECS
   ECSTaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
