@@ -69,7 +69,7 @@ jobs:
 
           echo "Creating service with new Target Group..."
           aws ecs create-service --cluster ${{ env.ECS_CLUSTER }} --service-name mvp-service-Stage --task-definition $TASK_ARN --launch-type FARGATE --desired-count 1 --network-configuration "awsvpcConfiguration={subnets=[$SUBNET_A,$SUBNET_B],securityGroups=[$SG_ID],assignPublicIp=ENABLED}" --load-balancers "targetGroupArn=$TG_STAGE,containerName=mvp-container,containerPort=8080"
-
+  #dsfsdf
   # Step C: Deploy to Production Environment (Manual Approval Required)
   deploy-production:
     needs: [build, deploy-stage]

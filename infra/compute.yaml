@@ -36,7 +36,6 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
 
-  # 2. CloudWatch Log Group
   ContainerLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:

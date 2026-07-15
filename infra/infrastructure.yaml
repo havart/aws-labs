@@ -18,7 +18,6 @@ Parameters:
     Description: CIDR block for Public Subnet B (AZ 2)
 
 Resources:
-  # Erstellung der universellen VPC
   MVPVPC:
     Type: AWS::EC2::VPC
     Properties:
